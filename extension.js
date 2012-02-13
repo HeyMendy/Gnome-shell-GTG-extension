@@ -105,6 +105,16 @@ function getTask(tid, callback) {
     gtg.GetTaskRemote(tid, handler);
 }
 
+//function getTasks(tid) {
+//	function handler(tasks, error) {
+//		if(error != null)
+//			global.log("Error retrieving GTG tasks: " + error);
+//		else
+//			callback(tasks);
+//	}
+//	gtg.GetTasksRemote(tid, handler);
+//}
+
 function openTaskEditor(task_id) {
     gtg.OpenTaskEditorRemote(task_id);
 }
@@ -123,6 +133,8 @@ function onTaskClicked(task_id) {
  ***************************************************************************/
 let K = 10;
 let gtgBox, tasksBox, topKTasks, more_tasks_button;
+
+
 
 /* Returns a score on the importance of the task. The lower the score,
  * the higher the importance.
@@ -204,7 +216,7 @@ function onTaskAddedOrModified(task) {
     /* if more than K tasks, add the [..] symbol */
     if(topKTasks.length > K && ! more_tasks_button) {
         more_tasks_button = new PopupMenu.PopupMenuItem('[...]',
-                                   {style_class: 'events-day-task'})
+                                   {style_class: 'events-day-task'});
         tasksBox.add(more_tasks_button.actor, -1, {expand: true});
     }
 }
@@ -248,6 +260,18 @@ function refreshAllTasks() {
     });
 }
 
+function _getTodayTask(){
+	topKTasks = new Array();
+	getActiveTasks(['@all'], function (tasks) {
+		let today = new Date();
+		global.log("in getTodayTask function, today is " + today);
+		for (var i in tasks) {
+			let time = tasks[i].duedate;
+			global.log("task duedate is " + time);
+		}
+	});
+}
+
 /****************************************************************************
  * Extension interface
  ***************************************************************************/
@@ -261,6 +285,7 @@ function init() {
 
 /* Extension disabling */
 function disable() {
+    global.log("GTG Extension enabled");
     try {
         gtgBox.destroy();
         separator.destroy();
@@ -273,13 +298,15 @@ function disable() {
 
 /*Extension enabling */
 function enable() {
+    global.log("GTG Extension enabled");
     /* Add GTG widget */
     function getChildByName (a_parent, name) {
         return a_parent.get_children().filter(
                 function(elem){
-                    return elem.name == name
+                    return elem.name == name;
                 })[0];
     }
+    _getTodayTask();
     let calendarArea = getChildByName(Main.panel._dateMenu.menu.box, 'calendarArea');
     separator = new St.DrawingArea({style_class: 'calendar-vertical-separator',
                                         pseudo_class: 'highlighted' });
@@ -302,6 +329,15 @@ function enable() {
                {y_align: St.Align.END,
                 expand: true,
                 y_fill: false});
+    /* Add ""*/
+    global.log("added111111111111111");
+    let item = new PopupMenu.PopupMenuItem(_("Hello"));
+    global.log("added22222222222222222");
+//    menu.addMenuItem(item);
+    global.log("added");
+    item = new PopupMenu.PopupMenuItem(_("goodbye"));
+//    this.menu.addMenuItem(item);
+    global.log("added");
     /* start listening for tasks */
     refreshAllTasks();
     signal_added_handle = gtg.connect(
