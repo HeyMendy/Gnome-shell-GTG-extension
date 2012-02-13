@@ -132,7 +132,7 @@ function onTaskClicked(task_id) {
  * Extension core
  ***************************************************************************/
 let K = 10;
-let gtgBox, tasksBox, topKTasks, more_tasks_button;
+let gtgBox, tasksBox, todayTasksBox, topKTasks, todayTasks, more_tasks_button;
 
 
 
@@ -165,6 +165,18 @@ function _insertTaskAtIndex(index, task) {
         /* if the task is due soon, add it to the UI */
         task.button = _prepareTaskButton(task);
         tasksBox.insert_actor(task.button, index, {expand: true});
+    }
+}
+
+/* Inserts a task button in the UI (if it's one of the top K)
+ */
+function _insertTodayTask(index, task) {
+    todayTasks.splice(index, 0, task);
+    let today = new Date();
+    if (task.duedate - today < 2) {
+        /* if the task is due today, add it to the UI */
+        task.button = _prepareTaskButton(task);
+        todayTasksBox.insert_actor(task.button, index, {expand: true});
     }
 }
 
@@ -206,6 +218,8 @@ function onTaskAddedOrModified(task) {
     if (index < K && ! inserted) {
         _insertTaskAtIndex(index, task);
     }
+    /* insert tasks which is due today in list todayTasks */
+    _insertTodayTask(index);
     /* delete any element after K */
     for (index in topKTasks.slice(K + 1)) {
         if (task.button) {
@@ -261,15 +275,17 @@ function refreshAllTasks() {
 }
 
 function _getTodayTask(){
-	topKTasks = new Array();
-	getActiveTasks(['@all'], function (tasks) {
-		let today = new Date();
-		global.log("in getTodayTask function, today is " + today);
-		for (var i in tasks) {
-			let time = tasks[i].duedate;
-			global.log("task duedate is " + time);
-		}
-	});
+    topKTasks = new Array();
+    getActiveTasks(['@all'], function (tasks) {
+        let today = new Date();
+        global.log("in getTodayTask function, today is " + today);
+        for (var i in tasks) {
+            let time = tasks[i].duedate;
+            if (time) {
+                global.log("task duedate is " + time);
+            }
+        }
+    });
 }
 
 /****************************************************************************
@@ -315,9 +331,17 @@ function enable() {
     gtgBox = new St.BoxLayout();
     gtgBox.set_vertical(true);
     calendarArea.add_actor(gtgBox, {expand: true});
+    /* Add "TopK" button */
+    _addFilterButtons("TopK");
+    /* Add "Today" button */
+    _addFilterButtons("Today");
+    /* taskBox: list of tasks */
     tasksBox = new St.BoxLayout();
     tasksBox.set_vertical(true);
     gtgBox.add(tasksBox, {style_class: 'calendar'});
+    /* todayTasksBox: list of tasks which will due today */
+    todayTasksBox = new St.BoxLayout();
+    todayTasksBox.set_vertical(true);
     /* Add "Open GTG" button */
     let open_gtg_button = new PopupMenu.PopupMenuItem("Open GTG");
     open_gtg_button.connect('activate', function () {
@@ -329,15 +353,7 @@ function enable() {
                {y_align: St.Align.END,
                 expand: true,
                 y_fill: false});
-    /* Add ""*/
-    global.log("added111111111111111");
-    let item = new PopupMenu.PopupMenuItem(_("Hello"));
-    global.log("added22222222222222222");
-//    menu.addMenuItem(item);
-    global.log("added");
-    item = new PopupMenu.PopupMenuItem(_("goodbye"));
-//    this.menu.addMenuItem(item);
-    global.log("added");
+
     /* start listening for tasks */
     refreshAllTasks();
     signal_added_handle = gtg.connect(
@@ -352,4 +368,36 @@ function enable() {
         'TaskDeleted', function(sender, tid) {
             onTaskDeleted(tid);
         });
+}
+
+/* add filter buttons on top */
+function _addFilterButtons(filter) {
+    let show_button = new PopupMenu.PopupMenuItem(filter);
+    if (filter == "Today") {
+        show_button.connect('activate', function () {
+            _showTodayTask();
+        });
+    } else if (filter == "TopK") {
+        show_button.connect('activate', function () {
+            _showTopKTask();
+        });
+    }
+    show_button.actor.can_focus = true;// .... lets see what "can_focus" can do 
+    gtgBox.add(show_button.actor,
+               {
+                //y_align: St.Align.END,
+                expand: false,
+                y_fill: false});
+}
+
+function _showTopKTask() {
+    global.log("_showTopKTask fired");
+    gtgBox.remove(todayTasksBox);
+    gtgBox.add(todayTasksBox, {style_class: 'calendar'});
+}
+
+function _showTodayTask() {
+    global.log("_showTodayTask fired");
+    gtgBox.remove(tasksBox);
+    gtgBox.add(todayTasksBox, {style_class: 'calendar'});
 }
