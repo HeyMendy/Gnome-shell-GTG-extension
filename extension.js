@@ -171,10 +171,14 @@ function _insertTaskAtIndex(index, task) {
 /* Inserts a task button in the UI (if it's one of the top K)
  */
 function _insertTodayTask(index, task) {
+    global.log("function _insertTodayTask");
     todayTasks.splice(index, 0, task);
     let today = new Date();
-    if (task.duedate - today < 2) {
+    let duedate = Date.parse(task.duedate)
+    global.log(task.title + " due date: " + task.duedate);
+    if (duedate - today < 2) {
         /* if the task is due today, add it to the UI */
+        global.log("New Today Tasks added  " + task.title);
         task.button = _prepareTaskButton(task);
         todayTasksBox.insert_actor(task.button, index, {expand: true});
     }
@@ -209,6 +213,8 @@ function onTaskAddedOrModified(task) {
     while (index < topKTasks.length) {
         if (task.score <= topKTasks[index].score) {
             _insertTaskAtIndex(index, task);
+            /* insert tasks which is due today in list todayTasks */
+            _insertTodayTask(index);
             inserted = true;
             break;
         }
@@ -275,7 +281,7 @@ function refreshAllTasks() {
 }
 
 function _getTodayTask(){
-    topKTasks = new Array();
+    todayTasks = new Array();
     getActiveTasks(['@all'], function (tasks) {
         let today = new Date();
         global.log("in getTodayTask function, today is " + today);
@@ -342,6 +348,7 @@ function enable() {
     /* todayTasksBox: list of tasks which will due today */
     todayTasksBox = new St.BoxLayout();
     todayTasksBox.set_vertical(true);
+    gtgBox.add(todayTasksBox, {style_class: 'calendar'});
     /* Add "Open GTG" button */
     let open_gtg_button = new PopupMenu.PopupMenuItem("Open GTG");
     open_gtg_button.connect('activate', function () {
@@ -392,12 +399,13 @@ function _addFilterButtons(filter) {
 
 function _showTopKTask() {
     global.log("_showTopKTask fired");
-    gtgBox.remove(todayTasksBox);
-    gtgBox.add(todayTasksBox, {style_class: 'calendar'});
+    todayTasksBox.hide();
+    tasksBox.show();
 }
 
 function _showTodayTask() {
     global.log("_showTodayTask fired");
-    gtgBox.remove(tasksBox);
-    gtgBox.add(todayTasksBox, {style_class: 'calendar'});
+    tasksBox.hide();
+    //gtgBox.remove(tasksBox);
+    todayTasksBox.show();
 }
