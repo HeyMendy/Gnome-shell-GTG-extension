@@ -174,9 +174,10 @@ function _insertTodayTask(index, task) {
     global.log("function _insertTodayTask");
     todayTasks.splice(index, 0, task);
     let today = new Date();
-    let duedate = Date.parse(task.duedate)
-    global.log(task.title + " due date: " + task.duedate);
-    if (duedate - today < 2) {
+    let duedate = Date.parse(task.duedate);
+    let diff = (duedate - today)/(1000*60*60*24);
+    global.log(task.title + " due date: " + task.duedate + " diff: " + diff);
+    if (diff< 2) {
         /* if the task is due today, add it to the UI */
         global.log("New Today Tasks added  " + task.title);
         task.button = _prepareTaskButton(task);
@@ -213,8 +214,6 @@ function onTaskAddedOrModified(task) {
     while (index < topKTasks.length) {
         if (task.score <= topKTasks[index].score) {
             _insertTaskAtIndex(index, task);
-            /* insert tasks which is due today in list todayTasks */
-            _insertTodayTask(index);
             inserted = true;
             break;
         }
@@ -225,7 +224,7 @@ function onTaskAddedOrModified(task) {
         _insertTaskAtIndex(index, task);
     }
     /* insert tasks which is due today in list todayTasks */
-    _insertTodayTask(index);
+    _insertTodayTask(index, task);
     /* delete any element after K */
     for (index in topKTasks.slice(K + 1)) {
         if (task.button) {
