@@ -25,6 +25,7 @@ const Lang = imports.lang;
 const Clutter = imports.gi.Clutter;
 const DBus = imports.dbus;
 const PopupMenu = imports.ui.popupMenu;
+const Util = imports.misc.util;
 
 /****************************************************************************
  * Helpers
@@ -175,9 +176,12 @@ function _insertTodayTask(index, task) {
     todayTasks.splice(index, 0, task);
     let today = new Date();
     let duedate = Date.parse(task.duedate);
-    let diff = (duedate - today)/(1000*60*60*24);
-    global.log(task.title + " due date: " + task.duedate + " diff: " + diff);
-    if (diff< 2) {
+    let startdate = Date.parse(task.startdate);
+    let one_day = 1000 * 60 * 60 * 24;
+    let diff_due = Math.round((duedate - today.getTime())/one_day);
+    let diff_start = Math.round((today.getTime() - startdate) / one_day);
+    global.log(task.title + " due date: " + task.duedate + " diff_due: " + diff_due + " diff_start " + diff_start);
+    if (diff_start >= 0 && diff_due >= 0) {
         /* if the task is due today, add it to the UI */
         global.log("New Today Tasks added  " + task.title);
         task.button = _prepareTaskButton(task);
@@ -287,7 +291,7 @@ function _getTodayTask(){
         for (var i in tasks) {
             let time = tasks[i].duedate;
             if (time) {
-                global.log("task duedate is " + time);
+     //           global.log("task duedate is " + time);
             }
         }
     });
@@ -350,30 +354,32 @@ function enable() {
     gtgBox.add(todayTasksBox, {style_class: 'calendar'});
     /* Add "Open GTG" button */
     let open_gtg_button = new PopupMenu.PopupMenuItem("Open GTG");
+
     open_gtg_button.connect('activate', function () {
         Main.panel._dateMenu.menu.close();
-        showTaskBrowser();
+        Util.spawn(['gtg', '-c', 'calendar']);
+
     });
     open_gtg_button.actor.can_focus = false;
     gtgBox.add(open_gtg_button.actor,
-               {y_align: St.Align.END,
+            {y_align: St.Align.END,
                 expand: true,
-                y_fill: false});
+        y_fill: false});
 
     /* start listening for tasks */
     refreshAllTasks();
     signal_added_handle = gtg.connect(
-        'TaskAdded', function(sender, tid) {
-            getTask(tid, onTaskAddedOrModified);
-        });
+            'TaskAdded', function(sender, tid) {
+                getTask(tid, onTaskAddedOrModified);
+            });
     signal_modified_handle = gtg.connect(
-        'TaskModified', function(sender, tid) {
-            getTask(tid, onTaskAddedOrModified);
-        });
+            'TaskModified', function(sender, tid) {
+                getTask(tid, onTaskAddedOrModified);
+            });
     signal_deleted_handle = gtg.connect(
-        'TaskDeleted', function(sender, tid) {
-            onTaskDeleted(tid);
-        });
+            'TaskDeleted', function(sender, tid) {
+                onTaskDeleted(tid);
+            });
 }
 
 /* add filter buttons on top */
@@ -390,10 +396,10 @@ function _addFilterButtons(filter) {
     }
     show_button.actor.can_focus = true;// .... lets see what "can_focus" can do 
     gtgBox.add(show_button.actor,
-               {
+            {
                 //y_align: St.Align.END,
                 expand: false,
-                y_fill: false});
+        y_fill: false});
 }
 
 function _showTopKTask() {
