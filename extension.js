@@ -25,6 +25,7 @@ const Lang = imports.lang;
 const Clutter = imports.gi.Clutter;
 const DBus = imports.dbus;
 const PopupMenu = imports.ui.popupMenu;
+const SearchMenu = imports.ui.viewSelector;
 const Util = imports.misc.util;
 
 /****************************************************************************
@@ -86,6 +87,7 @@ const GtgIFace = {
 const Gtg = DBus.makeProxyClass(GtgIFace);
 const gtg = new Gtg(DBus.session, 'org.gnome.GTG', '/org/gnome/GTG');
 
+
 function getActiveTasks(tags, callback) {
     function handler(results, error) {
         if (error != null)
@@ -134,6 +136,10 @@ function onTaskClicked(task_id) {
  ***************************************************************************/
 let K = 10;
 let gtgBox, tasksBox, todayTasksBox, topKTasks, todayTasks, more_tasks_button;
+/* Search Box */
+let searchTasksBox;
+let searchEntry, searchText, searchInactiveIcon, searchActiveIcon, isSearchActive, searchIconClickedId;
+let allTasks;
 
 
 
@@ -207,6 +213,7 @@ function _prepareTaskButton(task) {
 function onTaskAddedOrModified(task) {
     /* Delete all tasks with the same id in the UI */
     while (onTaskDeleted(task.id)){}
+    allTasks.push(task);
     if (task.status != 'Active') {
         return;
     }
@@ -268,6 +275,19 @@ function onTaskDeleted(tid) {
         more_tasks_button.destroy();
         more_tasks_button = null;
     }
+    /* Delete from allTasks */
+    index = 0;
+    let deletedInAll = false;
+    while (index < allTasks.length) {
+        if (allTasks[index].id == tid) {
+            deletedInAll = true;
+            break;
+        }
+        index += 1;
+    }
+    if (deletedInAll) {
+        allTasks.splice(index, 1);
+    }
     return deleted;
 }
 
@@ -275,6 +295,7 @@ function onTaskDeleted(tid) {
  * is started)
  */
 function refreshAllTasks() {
+    allTasks = new Array();
     topKTasks = new Array();
     getActiveTasks(['@all'], function (tasks) {
         for (var i in tasks) {
@@ -340,6 +361,8 @@ function enable() {
     gtgBox = new St.BoxLayout();
     gtgBox.set_vertical(true);
     calendarArea.add_actor(gtgBox, {expand: true});
+    /* Add search textbox */
+    _addSearchTextbox();
     /* Add "TopK" button */
     _addFilterButtons("TopK");
     /* Add "Today" button */
@@ -352,6 +375,10 @@ function enable() {
     todayTasksBox = new St.BoxLayout();
     todayTasksBox.set_vertical(true);
     gtgBox.add(todayTasksBox, {style_class: 'calendar'});
+    /* searchTasksBox: list of tasks which match the search text */
+    searchTasksBox = new St.BoxLayout();
+    searchTasksBox.set_vertical(true);
+    gtgBox.add(searchTasksBox, {style_class: 'calendar'});
     /* Add "Open GTG" button */
     let open_gtg_button = new PopupMenu.PopupMenuItem("Open GTG");
 
@@ -382,6 +409,103 @@ function enable() {
             });
 }
 
+/* add search textbox */
+function _addSearchTextbox(){
+    global.log("_addSearchTextbox");
+    /*
+    searchBox = new SearchMenu.SearchTab();
+    gtgBox.add(searchBox.title,
+            {expand: false,
+                y_fill: false});
+    searchBox.connect('search-cancelled', Lang.bind(this,
+                function() {
+                    //TODO:show default
+                }));
+    */
+    searchEntry = new St.Entry({ name: 'searchEntry',
+        hint_text: _("Type to search..."),
+        track_hover: true,
+        can_focus: true });
+    gtgBox.add(searchEntry,
+            {expand: false,
+                y_fill: false});
+    searchText = searchEntry.clutter_text;
+    searchText.connect('key-press-event', Lang.bind(this,
+                function(entry, event) {
+                    let symbol = event.get_key_symbol();
+                    if (symbol == Clutter.Escape) {
+                        //TODO:clear search reset view
+                        _resetSearch();
+                    }
+                }));
+    searchInactiveIcon = new St.Icon({ style_class: 'search-entry-icon',
+                                       icon_name: 'edit-find',
+                                       icon_type: St.IconType.SYMBOLIC });
+    searchActiveIcon = new St.Icon({ style_class: 'search-entry-icon',
+                                     icon_name: 'edit-clear',
+                                     icon_type: St.IconType.SYMBOLIC });
+    searchEntry.set_secondary_icon(searchInactiveIcon);
+    searchIconClickedId = 0;
+    searchText.connect('text-changed', Lang.bind(this, _onSearchTextChanged));
+
+        
+}
+
+function _onSearchTextChanged(se, prop) {
+    global.log("_onSearchTextChanged");
+    isSearchActive = searchEntry.get_text() != '';
+    global.log(searchEntry.get_text());
+    if (isSearchActive) {
+        searchEntry.set_secondary_icon(searchActiveIcon);
+        if (searchIconClickedId == 0) {
+            searchIconClickedId = searchEntry.connect('secondary-icon-clicked', 
+                    Lang.bind(this, function() {
+                        _resetSearch();
+                    }));
+        }
+    } else {
+        if (searchIconClickedId > 0)
+            searchEntry.disconnect(searchIconClickedId);
+        searchIconClickedId = 0;
+        searchEntry.set_secondary_icon(searchInactiveIcon);
+    }
+    if (!isSearchActive) {
+        if (searchIconClickedId > 0) {
+            searchIconClickedId = 0;
+        }
+        _showTopKTask();
+        //TODO:destroy searchTasksButtons
+        return;
+    } else {
+        let index = 0;
+        for (var i in allTasks) {
+            task = allTasks[i];
+            if (task.searchButton) {
+                task.searchButton.destroy();
+                task.searchButton= null;
+            }
+            let text = searchEntry.get_text();
+            global.log(task.title);
+            global.log(text);
+            if (task.title.toLowerCase().indexOf(text.toLowerCase()) != -1) {
+                task.searchButton = _prepareTaskButton(task);
+                searchTasksBox.insert_actor(task.searchButton, index, {expand: true});
+                index += 1;
+            }
+        }
+        global.log("gonna show search task");
+        _showSearchTask();
+    }
+}
+
+function _resetSearch() {
+    global.log("_resetSearch");
+    searchText.text = '';
+    global.stage.set_key_focus(null);
+    searchText.set_cursor_visible(true);
+    searchText.set_selection(0,0);
+}
+
 /* add filter buttons on top */
 function _addFilterButtons(filter) {
     let show_button = new PopupMenu.PopupMenuItem(filter);
@@ -405,12 +529,30 @@ function _addFilterButtons(filter) {
 function _showTopKTask() {
     global.log("_showTopKTask fired");
     todayTasksBox.hide();
+    searchTasksBox.hide();
     tasksBox.show();
 }
 
 function _showTodayTask() {
     global.log("_showTodayTask fired");
     tasksBox.hide();
-    //gtgBox.remove(tasksBox);
+    searchTasksBox.hide();
     todayTasksBox.show();
 }
+
+function _showSearchTask() {
+    global.log("_showTodayTask fired");
+    tasksBox.hide();
+    todayTasksBox.hide();
+    searchTasksBox.show();
+}
+
+/*
+const TaskSearchBox = new Lang.Class({
+    Name: 'TaskSearchBox',
+
+    _init : function() {
+        this
+    }
+});
+*/
